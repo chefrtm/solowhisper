@@ -3,19 +3,24 @@ import Cocoa
 import Carbon
 
 final class HotkeyManager {
-    typealias HotkeyCallback = (Bool) -> Void
+    typealias HotkeyCallback = (Preset, Bool) -> Void
 
     private let callback: HotkeyCallback
-    private let hotkeyType: String // "fn" or "ctrl_t"
-    private let usePushToTalk: Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var isFnPressed = false
-    private var isCtrlTPressed = false
 
-    init(hotkeyType: String = "fn", usePushToTalk: Bool = true, callback: @escaping HotkeyCallback) {
-        self.hotkeyType = hotkeyType
-        self.usePushToTalk = usePushToTalk
+    // Thread-safe preset access
+    private let presetsQueue = DispatchQueue(label: "com.solowhisper.hotkeys")
+    private var _registeredPresets: [Preset] = []
+    private var registeredPresets: [Preset] {
+        get { presetsQueue.sync { _registeredPresets } }
+        set { presetsQueue.sync { _registeredPresets = newValue } }
+    }
+
+    // Track press state per preset ID (accessed via presetsQueue for thread safety)
+    private var _pressedPresets: Set<UUID> = []
+
+    init(callback: @escaping HotkeyCallback) {
         self.callback = callback
         setupEventTap()
     }
@@ -24,14 +29,16 @@ final class HotkeyManager {
         stop()
     }
 
+    func updateHotkeys(_ presets: [Preset]) {
+        registeredPresets = presets.filter { $0.hotkeyKeyCode != nil || $0.isFnKey }
+    }
+
     private func setupEventTap() {
-        // Check accessibility permissions
         let trusted = AXIsProcessTrusted()
         if !trusted {
             print("⚠️ Accessibility permissions not granted. Requesting...")
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
             AXIsProcessTrustedWithOptions(options as CFDictionary)
-            // Start polling for permission grant
             pollForPermission()
             return
         }
@@ -51,18 +58,12 @@ final class HotkeyManager {
     }
 
     private func createEventTap() {
-        // Event mask depends on hotkey type
-        var eventMask: CGEventMask
+        // Combined mask: flagsChanged + keyDown + keyUp
+        let eventMask: CGEventMask =
+            (1 << CGEventType.flagsChanged.rawValue) |
+            (1 << CGEventType.keyDown.rawValue) |
+            (1 << CGEventType.keyUp.rawValue)
 
-        if hotkeyType == "fn" {
-            // Fn key uses flagsChanged
-            eventMask = (1 << CGEventType.flagsChanged.rawValue)
-        } else {
-            // Ctrl+T uses keyDown and keyUp
-            eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
-        }
-
-        // Create event tap
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
 
         eventTap = CGEvent.tapCreate(
@@ -71,7 +72,6 @@ final class HotkeyManager {
             options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: { (proxy, type, event, userInfo) -> Unmanaged<CGEvent>? in
-                // Handle tap disabled by timeout
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                     if let tap = userInfo {
                         let manager = Unmanaged<HotkeyManager>.fromOpaque(tap).takeUnretainedValue()
@@ -87,86 +87,91 @@ final class HotkeyManager {
                 }
 
                 let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo).takeUnretainedValue()
+                manager.handleEvent(type: type, event: event)
 
-                if type == .flagsChanged {
-                    manager.handleFlagsChanged(event)
-                } else if type == .keyDown || type == .keyUp {
-                    manager.handleKeyEvent(event, isDown: type == .keyDown)
-                }
-
-                // Pass event through (don't consume it)
                 return Unmanaged.passUnretained(event)
             },
             userInfo: userInfo
         )
 
         guard let eventTap = eventTap else {
-            print("❌ Failed to create CGEventTap. Check Accessibility permissions in System Settings.")
+            print("❌ Failed to create CGEventTap.")
             return
         }
 
-        // Create run loop source and add to current run loop
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
 
         if let runLoopSource = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: eventTap, enable: true)
-            let hotkeyName = hotkeyType == "fn" ? "Fn (🌐)" : "Ctrl+T"
-            print("✅ Hotkey monitor active. Using \(hotkeyName)")
+            print("✅ Hotkey monitor active (multi-preset)")
         }
     }
 
-    private func handleFlagsChanged(_ event: CGEvent) {
-        guard hotkeyType == "fn" else { return }
+    private func handleEvent(type: CGEventType, event: CGEvent) {
+        presetsQueue.sync {
+            let presets = _registeredPresets
 
-        // Check Fn key state via modifierFlags
+            if type == .flagsChanged {
+                handleFlagsChanged(event, presets: presets)
+            } else if type == .keyDown || type == .keyUp {
+                handleKeyEvent(event, isDown: type == .keyDown, presets: presets)
+            }
+        }
+    }
+
+    private func handleFlagsChanged(_ event: CGEvent, presets: [Preset]) {
         let flags = event.flags
         let fnPressed = flags.contains(.maskSecondaryFn)
 
-        if fnPressed && !isFnPressed {
-            isFnPressed = true
-            print("🎤 Fn pressed")
-            DispatchQueue.main.async { [weak self] in
-                self?.callback(true)
-            }
-        } else if !fnPressed && isFnPressed {
-            isFnPressed = false
-            // In toggle mode, ignore key release
-            if usePushToTalk {
-                print("⏹️ Fn released")
+        for preset in presets where preset.isFnKey {
+            let wasPressed = _pressedPresets.contains(preset.id)
+
+            if fnPressed && !wasPressed {
+                _pressedPresets.insert(preset.id)
                 DispatchQueue.main.async { [weak self] in
-                    self?.callback(false)
+                    self?.callback(preset, true)
+                }
+            } else if !fnPressed && wasPressed {
+                _pressedPresets.remove(preset.id)
+                if preset.mode == .pushToTalk {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.callback(preset, false)
+                    }
                 }
             }
         }
     }
 
-    private func handleKeyEvent(_ event: CGEvent, isDown: Bool) {
-        guard hotkeyType == "ctrl_t" else { return }
-
-        // Check for Ctrl+T: keycode 17 is 'T', ctrl modifier
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    private func handleKeyEvent(_ event: CGEvent, isDown: Bool, presets: [Preset]) {
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
 
-        // T key = 17, Ctrl modifier
-        let isCtrlPressed = flags.contains(.maskControl)
-        let isTKey = keyCode == 17
+        for preset in presets where !preset.isFnKey {
+            guard let presetKeyCode = preset.hotkeyKeyCode,
+                  presetKeyCode == keyCode else { continue }
 
-        guard isCtrlPressed && isTKey else { return }
+            // Check modifier match
+            let presetFlags = CGEventFlags(rawValue: preset.hotkeyModifiers)
+            let relevantMask: CGEventFlags = [.maskControl, .maskCommand, .maskShift, .maskAlternate]
+            let eventRelevant = flags.intersection(relevantMask)
+            let presetRelevant = presetFlags.intersection(relevantMask)
 
-        if isDown && !isCtrlTPressed {
-            isCtrlTPressed = true
-            print("🎤 Ctrl+T pressed")
-            DispatchQueue.main.async { [weak self] in
-                self?.callback(true)
-            }
-        } else if !isDown && isCtrlTPressed {
-            isCtrlTPressed = false
-            // In toggle mode, ignore key release
-            if usePushToTalk {
-                print("⏹️ Ctrl+T released")
+            guard eventRelevant == presetRelevant else { continue }
+
+            let wasPressed = _pressedPresets.contains(preset.id)
+
+            if isDown && !wasPressed {
+                _pressedPresets.insert(preset.id)
                 DispatchQueue.main.async { [weak self] in
-                    self?.callback(false)
+                    self?.callback(preset, true)
+                }
+            } else if !isDown && wasPressed {
+                _pressedPresets.remove(preset.id)
+                if preset.mode == .pushToTalk {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.callback(preset, false)
+                    }
                 }
             }
         }
@@ -181,8 +186,7 @@ final class HotkeyManager {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             self.eventTap = nil
         }
-        isFnPressed = false
-        isCtrlTPressed = false
+        presetsQueue.sync { _pressedPresets.removeAll() }
     }
 
     static var hasAccessibilityPermission: Bool {
