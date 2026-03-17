@@ -2,31 +2,23 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
-    @State private var apiKeyInput = ""
-    @State private var showAPIKey = false
-
-    private let languages = [
-        ("auto", "Auto-detect"),
-        ("en", "English"),
-        ("ru", "Russian"),
-        ("es", "Spanish"),
-        ("fr", "French"),
-        ("de", "German"),
-        ("zh", "Chinese"),
-        ("ja", "Japanese"),
-        ("ko", "Korean")
-    ]
+    @State private var selectedPresetID: UUID?
 
     var body: some View {
         TabView {
-            generalTab
+            presetsTab
                 .tabItem {
-                    Label("General", systemImage: "gear")
+                    Label("Presets", systemImage: "slider.horizontal.3")
                 }
 
-            apiTab
+            APIKeysView()
                 .tabItem {
-                    Label("API", systemImage: "key")
+                    Label("API Keys", systemImage: "key")
+                }
+
+            HistoryView()
+                .tabItem {
+                    Label("History", systemImage: "clock")
                 }
 
             aboutTab
@@ -34,89 +26,38 @@ struct SettingsView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 450, height: 300)
-    }
-
-    private var generalTab: some View {
-        Form {
-            Section {
-                Toggle("Auto-insert transcribed text", isOn: $appState.autoInsertText)
-                Toggle("Use local transcription (WhisperKit)", isOn: $appState.useLocalEngine)
-                    .onChange(of: appState.useLocalEngine) { _, newValue in
-                        appState.setupTranscriptionEngine()
-                    }
-            }
-
-            Section {
-                Picker("Language", selection: $appState.selectedLanguage) {
-                    ForEach(languages, id: \.0) { code, name in
-                        Text(name).tag(code)
-                    }
-                }
-            }
-
-            Section {
-                HStack {
-                    Text("Hotkey")
-                    Spacer()
-                    Text("Fn / 🌐 (hold)")
-                        .foregroundStyle(.secondary)
-                }
+        .frame(width: 600, height: 450)
+        .onAppear {
+            if selectedPresetID == nil {
+                selectedPresetID = appState.presetStore.presets.first?.id
             }
         }
-        .formStyle(.grouped)
-        .padding()
     }
 
-    private var apiTab: some View {
-        Form {
-            Section {
-                HStack {
-                    Text("API Key Status")
-                    Spacer()
-                    if appState.hasAPIKey {
-                        Label("Configured", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("Not Set", systemImage: "xmark.circle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
+    private var presetsTab: some View {
+        HSplitView {
+            PresetListView(
+                presetStore: appState.presetStore,
+                selectedPresetID: $selectedPresetID
+            )
+            .frame(width: 180)
 
-                if appState.hasAPIKey {
-                    Button("Remove API Key", role: .destructive) {
-                        appState.keychainManager.deleteAPIKey()
-                        appState.setupTranscriptionEngine()
-                    }
-                }
-            }
-
-            Section("Set New API Key") {
-                HStack {
-                    if showAPIKey {
-                        TextField("sk-...", text: $apiKeyInput)
-                    } else {
-                        SecureField("sk-...", text: $apiKeyInput)
-                    }
-                    Button(action: { showAPIKey.toggle() }) {
-                        Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                    }
-                    .buttonStyle(.borderless)
-                }
-
-                Button("Save API Key") {
-                    appState.updateAPIKey(apiKeyInput)
-                    apiKeyInput = ""
-                }
-                .disabled(apiKeyInput.isEmpty)
-            }
-
-            Section {
-                Link("Get API Key from OpenAI",
-                     destination: URL(string: "https://platform.openai.com/api-keys")!)
+            if let id = selectedPresetID,
+               let index = appState.presetStore.presets.firstIndex(where: { $0.id == id }) {
+                let presetBinding = Binding(
+                    get: { appState.presetStore.presets[index] },
+                    set: { appState.presetStore.update($0) }
+                )
+                PresetEditorView(
+                    preset: presetBinding,
+                    conflictingPreset: appState.presetStore.hasHotkeyConflict(appState.presetStore.presets[index])
+                )
+            } else {
+                Text("Select a preset")
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .formStyle(.grouped)
         .padding()
     }
 
@@ -130,7 +71,7 @@ struct SettingsView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("Version 1.0.0")
+            Text("Version 2.0.0")
                 .foregroundStyle(.secondary)
 
             Text("Speech-to-text transcription utility for macOS")
@@ -150,9 +91,4 @@ struct SettingsView: View {
         }
         .padding()
     }
-}
-
-#Preview {
-    SettingsView()
-        .environmentObject(AppState())
 }

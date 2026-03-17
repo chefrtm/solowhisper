@@ -2,110 +2,18 @@ import SwiftUI
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
-    @State private var showingSettings = false
-    @State private var apiKeyInput = ""
 
     var body: some View {
         VStack(spacing: 12) {
-            if showingSettings {
-                settingsSection
-            } else {
-                headerSection
-                statusSection
-                transcriptionSection
-                controlsSection
-                Divider()
-                footerSection
-            }
+            headerSection
+            statusSection
+            transcriptionSection
+            controlsSection
+            Divider()
+            footerSection
         }
         .padding()
         .frame(width: 300)
-    }
-
-    private var settingsSection: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Button(action: { showingSettings = false }) {
-                    Image(systemName: "chevron.left")
-                }
-                .buttonStyle(.plain)
-                Text("Settings")
-                    .font(.headline)
-                Spacer()
-            }
-
-            Divider()
-
-            Toggle("Use local transcription (WhisperKit)", isOn: $appState.useLocalEngine)
-                .onChange(of: appState.useLocalEngine) { _, _ in
-                    appState.setupTranscriptionEngine()
-                }
-
-            Toggle("Auto-insert text", isOn: $appState.autoInsertText)
-
-            Picker("Recording mode", selection: $appState.usePushToTalk) {
-                Text("Push-to-talk (hold Fn)").tag(true)
-                Text("Toggle (tap)").tag(false)
-            }
-            .onChange(of: appState.usePushToTalk) { _, newValue in
-                // If switching to push-to-talk, force Fn hotkey
-                if newValue && appState.hotkeyType != "fn" {
-                    appState.hotkeyType = "fn"
-                }
-                appState.setupHotkeyManager()
-            }
-
-            // Hotkey picker only shown for Toggle mode
-            if !appState.usePushToTalk {
-                Picker("Hotkey", selection: $appState.hotkeyType) {
-                    Text("Fn (🌐)").tag("fn")
-                    Text("Ctrl + T").tag("ctrl_t")
-                }
-                .onChange(of: appState.hotkeyType) { _, _ in
-                    appState.setupHotkeyManager()
-                }
-            }
-
-            Picker("Language", selection: $appState.selectedLanguage) {
-                Text("Auto-detect").tag("auto")
-                Text("English").tag("en")
-                Text("Russian").tag("ru")
-                Text("Spanish").tag("es")
-                Text("German").tag("de")
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("API Key")
-                    Spacer()
-                    if appState.hasAPIKey {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Button("Remove") {
-                            appState.keychainManager.deleteAPIKey()
-                            appState.setupTranscriptionEngine()
-                        }
-                        .font(.caption)
-                    }
-                }
-
-                if !appState.hasAPIKey {
-                    TextField("sk-...", text: $apiKeyInput)
-                        .textFieldStyle(.roundedBorder)
-
-                    Button("Save API Key") {
-                        appState.updateAPIKey(apiKeyInput)
-                        apiKeyInput = ""
-                    }
-                    .disabled(apiKeyInput.isEmpty)
-                    .frame(maxWidth: .infinity)
-                }
-            }
-
-            Spacer()
-        }
     }
 
     private var headerSection: some View {
@@ -147,15 +55,6 @@ struct MenuBarView: View {
         }
     }
 
-    private var hotkeyHint: String {
-        if appState.usePushToTalk {
-            return "Hold Fn (🌐) to record"
-        } else {
-            let key = appState.hotkeyType == "fn" ? "Fn (🌐)" : "Ctrl+T"
-            return "Tap \(key) to start/stop"
-        }
-    }
-
     private var transcriptionSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             if !appState.lastTranscription.isEmpty {
@@ -182,61 +81,95 @@ struct MenuBarView: View {
 
     private var controlsSection: some View {
         VStack(spacing: 8) {
-            Button(action: {
-                if appState.isRecording {
+            if appState.isRecording {
+                Button(action: {
                     appState.stopRecordingAndTranscribe()
-                } else {
-                    appState.startRecording()
+                }) {
+                    Label("Stop Recording", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
                 }
-            }) {
-                Label(
-                    appState.isRecording ? "Stop Recording" : "Start Recording",
-                    systemImage: appState.isRecording ? "stop.fill" : "mic.fill"
-                )
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(appState.isRecording ? .red : .blue)
 
-            Text(hotkeyHint)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            // Hotkey hints
+            ForEach(appState.presetStore.presets) { preset in
+                if preset.hotkeyKeyCode != nil || preset.isFnKey {
+                    HStack {
+                        Text(preset.name)
+                            .font(.caption)
+                        Spacer()
+                        Text(hotkeyHint(for: preset))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
         }
+    }
+
+    private func hotkeyHint(for preset: Preset) -> String {
+        let keyName: String
+        if preset.isFnKey {
+            keyName = "Fn (🌐)"
+        } else if let kc = preset.hotkeyKeyCode {
+            var parts: [String] = []
+            let flags = CGEventFlags(rawValue: preset.hotkeyModifiers)
+            if flags.contains(.maskControl) { parts.append("⌃") }
+            if flags.contains(.maskAlternate) { parts.append("⌥") }
+            if flags.contains(.maskShift) { parts.append("⇧") }
+            if flags.contains(.maskCommand) { parts.append("⌘") }
+            parts.append(keyCodeToString(kc))
+            keyName = parts.joined()
+        } else {
+            return "No hotkey"
+        }
+
+        if preset.mode == .pushToTalk {
+            return "Hold \(keyName)"
+        } else {
+            return "Tap \(keyName)"
+        }
+    }
+
+    // Same key map as HotkeyRecorderView — must stay in sync
+    private func keyCodeToString(_ keyCode: UInt16) -> String {
+        let keyMap: [UInt16: String] = [
+            0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
+            8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
+            16: "Y", 17: "T", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
+            23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
+            30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 36: "Return",
+            37: "L", 38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",",
+            44: "/", 45: "N", 46: "M", 47: ".", 48: "Tab", 49: "Space",
+            50: "`", 51: "Delete", 53: "Esc",
+            96: "F5", 97: "F6", 98: "F7", 99: "F3", 100: "F8",
+            101: "F9", 103: "F11", 105: "F13", 107: "F14",
+            109: "F10", 111: "F12", 113: "F15", 118: "F4",
+            120: "F2", 122: "F1",
+        ]
+        return keyMap[keyCode] ?? "Key\(keyCode)"
     }
 
     private var footerSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Toggle("Auto-insert text", isOn: $appState.autoInsertText)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
+        HStack {
+            if !appState.hasAPIKey(provider: "openai") {
+                Text("API Key not set")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
 
-            HStack {
-                if !appState.hasAPIKey {
-                    Text("API Key not set")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
+            Spacer()
 
-                Spacer()
-
-                Button("Settings") {
-                    showingSettings = true
-                }
-                .font(.caption)
-
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
-                .font(.caption)
+            Button("Settings") {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             }
+            .font(.caption)
+
+            Button("Quit") {
+                NSApplication.shared.terminate(nil)
+            }
+            .font(.caption)
         }
     }
-
-}
-
-#Preview {
-    MenuBarView()
-        .environmentObject(AppState())
 }
