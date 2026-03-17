@@ -30,7 +30,7 @@ final class AppState: ObservableObject {
 
     func setupTranscriptionEngine() {
         if useLocalEngine {
-            transcriptionEngine = LocalEngine()
+            transcriptionEngine = WhisperKitEngine()
         } else {
             let apiKey = keychainManager.getAPIKey() ?? ""
             transcriptionEngine = CloudEngine(apiKey: apiKey)

@@ -4,7 +4,7 @@ import Foundation
 import WhisperKit
 #endif
 
-final class LocalEngine: TranscriptionEngine {
+final class WhisperKitEngine: TranscriptionEngine {
     #if canImport(WhisperKit)
     private var whisperKit: WhisperKit?
     private var isLoading = false
@@ -31,7 +31,7 @@ final class LocalEngine: TranscriptionEngine {
     }
 
     func transcribe(audioData: Data, language: String) async throws -> String {
-        print("🎯 LocalEngine.transcribe called, audio size: \(audioData.count) bytes")
+        print("🎯 WhisperKitEngine.transcribe called, audio size: \(audioData.count) bytes")
 
         guard let whisperKit = whisperKit else {
             print("❌ WhisperKit model not loaded")
@@ -54,7 +54,7 @@ final class LocalEngine: TranscriptionEngine {
         let results = try await whisperKit.transcribe(audioPath: tempURL.path, decodeOptions: options)
 
         let text = results.map { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        print("✅ LocalEngine transcription: \(text.prefix(50))...")
+        print("✅ WhisperKitEngine transcription: \(text.prefix(50))...")
 
         return text
     }

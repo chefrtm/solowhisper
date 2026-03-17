@@ -14,7 +14,7 @@
 		005 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* AudioRecorder.swift */; };
 		006 /* TranscriptionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* TranscriptionEngine.swift */; };
 		007 /* CloudEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* CloudEngine.swift */; };
-		008 /* LocalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108 /* LocalEngine.swift */; };
+		008 /* WhisperKitEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108 /* WhisperKitEngine.swift */; };
 		009 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* HotkeyManager.swift */; };
 		010 /* TextInserter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* TextInserter.swift */; };
 		011 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* KeychainManager.swift */; };
@@ -30,7 +30,7 @@
 		105 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		106 /* TranscriptionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionEngine.swift; sourceTree = "<group>"; };
 		107 /* CloudEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudEngine.swift; sourceTree = "<group>"; };
-		108 /* LocalEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEngine.swift; sourceTree = "<group>"; };
+		108 /* WhisperKitEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKitEngine.swift; sourceTree = "<group>"; };
 		109 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		110 /* TextInserter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInserter.swift; sourceTree = "<group>"; };
 		111 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
@@ -154,7 +154,7 @@
 			children = (
 				106 /* TranscriptionEngine.swift */,
 				107 /* CloudEngine.swift */,
-				108 /* LocalEngine.swift */,
+				108 /* WhisperKitEngine.swift */,
 			);
 			path = Transcription;
 			sourceTree = "<group>";
@@ -265,7 +265,7 @@
 				006 /* TranscriptionEngine.swift in Sources */,
 				007 /* CloudEngine.swift in Sources */,
 				44B1704A2F34D1480009988E /* MenuBarIcon.swift in Sources */,
-				008 /* LocalEngine.swift in Sources */,
+				008 /* WhisperKitEngine.swift in Sources */,
 				009 /* HotkeyManager.swift in Sources */,
 				010 /* TextInserter.swift in Sources */,
 				011 /* KeychainManager.swift in Sources */,
