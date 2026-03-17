@@ -12,3 +12,6 @@ xcuserdata/
 # Dependencies
 .build/
 Packages/
+
+# Superpowers
+.superpowers/
