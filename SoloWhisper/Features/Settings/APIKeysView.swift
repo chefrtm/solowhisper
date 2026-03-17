@@ -23,6 +23,7 @@ struct APIKeysView: View {
                 if appState.hasAPIKey(provider: "openai") {
                     Button("Remove API Key", role: .destructive) {
                         appState.keychainManager.deleteAPIKey(provider: "openai")
+                        appState.objectWillChange.send()
                     }
                 }
             }
@@ -43,6 +44,7 @@ struct APIKeysView: View {
                 Button("Save API Key") {
                     appState.updateAPIKey(apiKeyInput, provider: "openai")
                     apiKeyInput = ""
+                    appState.objectWillChange.send()
                 }
                 .disabled(apiKeyInput.isEmpty)
             }

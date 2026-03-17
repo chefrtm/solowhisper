@@ -41,6 +41,19 @@ final class AppState: ObservableObject {
                 self?.hotkeyManager?.updateHotkeys(presets)
             }
             .store(in: &cancellables)
+
+        // Forward nested ObservableObject changes so SwiftUI views update
+        presetStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        historyStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Hotkey Setup

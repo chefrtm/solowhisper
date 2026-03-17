@@ -1,6 +1,7 @@
 import Foundation
 import Cocoa
 import Carbon
+import os.lock
 
 final class HotkeyManager {
     typealias HotkeyCallback = (Preset, Bool) -> Void
@@ -9,16 +10,8 @@ final class HotkeyManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    // Thread-safe preset access
-    private let presetsQueue = DispatchQueue(label: "com.solowhisper.hotkeys")
-    private var _registeredPresets: [Preset] = []
-    private var registeredPresets: [Preset] {
-        get { presetsQueue.sync { _registeredPresets } }
-        set { presetsQueue.sync { _registeredPresets = newValue } }
-    }
-
-    // Track press state per preset ID (accessed via presetsQueue for thread safety)
-    private var _pressedPresets: Set<UUID> = []
+    // Lock-free thread-safe preset access (no queue contention in event tap)
+    private let lock = OSAllocatedUnfairLock(initialState: ([Preset](), Set<UUID>()))
 
     init(callback: @escaping HotkeyCallback) {
         self.callback = callback
@@ -30,7 +23,9 @@ final class HotkeyManager {
     }
 
     func updateHotkeys(_ presets: [Preset]) {
-        registeredPresets = presets.filter { $0.hotkeyKeyCode != nil || $0.isFnKey }
+        lock.withLock { state in
+            state.0 = presets.filter { $0.hotkeyKeyCode != nil || $0.isFnKey }
+        }
     }
 
     private func setupEventTap() {
@@ -58,7 +53,6 @@ final class HotkeyManager {
     }
 
     private func createEventTap() {
-        // Combined mask: flagsChanged + keyDown + keyUp
         let eventMask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue) |
@@ -69,7 +63,7 @@ final class HotkeyManager {
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: { (proxy, type, event, userInfo) -> Unmanaged<CGEvent>? in
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -104,71 +98,62 @@ final class HotkeyManager {
         if let runLoopSource = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: eventTap, enable: true)
-            print("✅ Hotkey monitor active (multi-preset)")
+            print("✅ Hotkey monitor active (listen-only, multi-preset)")
         }
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) {
-        presetsQueue.sync {
-            let presets = _registeredPresets
-
-            if type == .flagsChanged {
-                handleFlagsChanged(event, presets: presets)
-            } else if type == .keyDown || type == .keyUp {
-                handleKeyEvent(event, isDown: type == .keyDown, presets: presets)
-            }
-        }
-    }
-
-    private func handleFlagsChanged(_ event: CGEvent, presets: [Preset]) {
-        let flags = event.flags
-        let fnPressed = flags.contains(.maskSecondaryFn)
-
-        for preset in presets where preset.isFnKey {
-            let wasPressed = _pressedPresets.contains(preset.id)
-
-            if fnPressed && !wasPressed {
-                _pressedPresets.insert(preset.id)
-                DispatchQueue.main.async { [weak self] in
-                    self?.callback(preset, true)
-                }
-            } else if !fnPressed && wasPressed {
-                _pressedPresets.remove(preset.id)
-                DispatchQueue.main.async { [weak self] in
-                    self?.callback(preset, false)
-                }
-            }
-        }
-    }
-
-    private func handleKeyEvent(_ event: CGEvent, isDown: Bool, presets: [Preset]) {
+        // Extract event data before taking the lock (CGEvent access is fast)
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
+        let isDown = type == .keyDown
 
-        for preset in presets where !preset.isFnKey {
-            guard let presetKeyCode = preset.hotkeyKeyCode,
-                  presetKeyCode == keyCode else { continue }
+        // Minimal time under lock — just check presets and update press state
+        let actions: [(Preset, Bool)] = lock.withLock { state in
+            let presets = state.0
+            var result: [(Preset, Bool)] = []
 
-            // Check modifier match
-            let presetFlags = CGEventFlags(rawValue: preset.hotkeyModifiers)
-            let relevantMask: CGEventFlags = [.maskControl, .maskCommand, .maskShift, .maskAlternate]
-            let eventRelevant = flags.intersection(relevantMask)
-            let presetRelevant = presetFlags.intersection(relevantMask)
-
-            guard eventRelevant == presetRelevant else { continue }
-
-            let wasPressed = _pressedPresets.contains(preset.id)
-
-            if isDown && !wasPressed {
-                _pressedPresets.insert(preset.id)
-                DispatchQueue.main.async { [weak self] in
-                    self?.callback(preset, true)
+            if type == .flagsChanged {
+                let fnPressed = flags.contains(.maskSecondaryFn)
+                for preset in presets where preset.isFnKey {
+                    let wasPressed = state.1.contains(preset.id)
+                    if fnPressed && !wasPressed {
+                        state.1.insert(preset.id)
+                        result.append((preset, true))
+                    } else if !fnPressed && wasPressed {
+                        state.1.remove(preset.id)
+                        result.append((preset, false))
+                    }
                 }
-            } else if !isDown && wasPressed {
-                _pressedPresets.remove(preset.id)
-                DispatchQueue.main.async { [weak self] in
-                    self?.callback(preset, false)
+            } else if type == .keyDown || type == .keyUp {
+                let relevantMask: CGEventFlags = [.maskControl, .maskCommand, .maskShift, .maskAlternate]
+                let eventRelevant = flags.intersection(relevantMask)
+
+                for preset in presets where !preset.isFnKey {
+                    guard let presetKeyCode = preset.hotkeyKeyCode,
+                          presetKeyCode == keyCode else { continue }
+
+                    let presetFlags = CGEventFlags(rawValue: preset.hotkeyModifiers)
+                    guard eventRelevant == presetFlags.intersection(relevantMask) else { continue }
+
+                    let wasPressed = state.1.contains(preset.id)
+                    if isDown && !wasPressed {
+                        state.1.insert(preset.id)
+                        result.append((preset, true))
+                    } else if !isDown && wasPressed {
+                        state.1.remove(preset.id)
+                        result.append((preset, false))
+                    }
                 }
+            }
+
+            return result
+        }
+
+        // Dispatch callbacks outside the lock
+        for (preset, pressed) in actions {
+            DispatchQueue.main.async { [weak self] in
+                self?.callback(preset, pressed)
             }
         }
     }
@@ -182,7 +167,7 @@ final class HotkeyManager {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             self.eventTap = nil
         }
-        presetsQueue.sync { _pressedPresets.removeAll() }
+        lock.withLock { state in state.1.removeAll() }
     }
 
     static var hasAccessibilityPermission: Bool {

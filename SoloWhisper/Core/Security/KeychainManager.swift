@@ -109,10 +109,13 @@ final class KeychainManager {
     }
 
     func migrateV1KeyIfNeeded() {
-        // Check if old-style key exists
-        if let oldKey = getAPIKey() {
+        let flag = "solowhisper.v1KeyMigrated"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+
+        // Old account ("openai-api-key") == new account, so just skip delete
+        if let oldKey = getAPIKey(), getAPIKey(provider: "openai") == nil {
             saveAPIKey(oldKey, provider: "openai")
-            deleteAPIKey() // remove old-style key
         }
     }
 }

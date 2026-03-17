@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(spacing: 12) {
@@ -14,6 +15,7 @@ struct MenuBarView: View {
         }
         .padding()
         .frame(width: 300)
+        .background(PanelConfigurator())
     }
 
     private var headerSection: some View {
@@ -132,7 +134,7 @@ struct MenuBarView: View {
         }
     }
 
-    // Same key map as HotkeyRecorderView — must stay in sync
+    // Same key map as HotkeyRecorderView — keep in sync
     private func keyCodeToString(_ keyCode: UInt16) -> String {
         let keyMap: [UInt16: String] = [
             0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
@@ -162,7 +164,8 @@ struct MenuBarView: View {
             Spacer()
 
             Button("Settings") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                NSApp.activate()
+                openSettings()
             }
             .font(.caption)
 
@@ -170,6 +173,67 @@ struct MenuBarView: View {
                 NSApplication.shared.terminate(nil)
             }
             .font(.caption)
+        }
+    }
+}
+
+// Dismisses the MenuBarExtra panel when clicking outside of it
+private struct PanelConfigurator: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            context.coordinator.configure(window: window)
+        }
+    }
+
+    class Coordinator {
+        private var monitor: Any?
+        private var observation: NSKeyValueObservation?
+        private weak var observedWindow: NSWindow?
+
+        func configure(window: NSWindow) {
+            guard observedWindow !== window else { return }
+            observedWindow = window
+
+            observation = window.observe(\.isVisible, options: [.new]) { [weak self] window, change in
+                DispatchQueue.main.async {
+                    if change.newValue == true {
+                        self?.startMonitoring(window: window)
+                    } else {
+                        self?.stopMonitoring()
+                    }
+                }
+            }
+
+            if window.isVisible {
+                startMonitoring(window: window)
+            }
+        }
+
+        private func startMonitoring(window: NSWindow) {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak window] _ in
+                guard let window = window, window.isVisible else { return }
+                if !window.frame.contains(NSEvent.mouseLocation) {
+                    window.orderOut(nil)
+                }
+            }
+        }
+
+        private func stopMonitoring() {
+            if let monitor = monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        deinit {
+            stopMonitoring()
+            observation?.invalidate()
         }
     }
 }

@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os.lock
 
 enum AudioRecorderError: LocalizedError {
     case permissionDenied
@@ -21,11 +22,13 @@ enum AudioRecorderError: LocalizedError {
 @MainActor
 final class AudioRecorder {
     private var audioEngine: AVAudioEngine?
-    private var audioData: Data = Data()
     private var isRecording = false
 
     private let sampleRate: Double = 16000
     private let channels: AVAudioChannelCount = 1
+
+    // Thread-safe audio buffer — accessed from audio tap thread and main thread
+    private let audioBuffer = AudioBuffer()
 
     func startRecording() throws {
         guard !isRecording else { return }
@@ -38,7 +41,7 @@ final class AudioRecorder {
             throw AudioRecorderError.permissionDenied
         }
 
-        audioData = Data()
+        audioBuffer.reset()
         audioEngine = AVAudioEngine()
 
         guard let audioEngine = audioEngine else {
@@ -56,9 +59,16 @@ final class AudioRecorder {
         )!
 
         let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+        let targetRate = sampleRate
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            self?.processAudioBuffer(buffer, converter: converter, outputFormat: outputFormat)
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [audioBuffer] buffer, _ in
+            AudioRecorder.processAudioBuffer(
+                buffer,
+                converter: converter,
+                outputFormat: outputFormat,
+                targetRate: targetRate,
+                into: audioBuffer
+            )
         }
 
         do {
@@ -80,24 +90,25 @@ final class AudioRecorder {
         audioEngine.stop()
         isRecording = false
 
-        let wavData = createWAVFile(from: audioData)
+        let pcmData = audioBuffer.getData()
+        let wavData = createWAVFile(from: pcmData)
         self.audioEngine = nil
 
         return wavData
     }
 
-    private func processAudioBuffer(
+    // Static method — no self capture, safe to call from audio thread
+    private static func processAudioBuffer(
         _ buffer: AVAudioPCMBuffer,
         converter: AVAudioConverter?,
-        outputFormat: AVAudioFormat
+        outputFormat: AVAudioFormat,
+        targetRate: Double,
+        into audioBuffer: AudioBuffer
     ) {
-        guard let converter = converter else {
-            appendFloatBuffer(buffer)
-            return
-        }
+        guard let converter = converter else { return }
 
         let frameCapacity = AVAudioFrameCount(
-            Double(buffer.frameLength) * sampleRate / buffer.format.sampleRate
+            Double(buffer.frameLength) * targetRate / buffer.format.sampleRate
         )
 
         guard let convertedBuffer = AVAudioPCMBuffer(
@@ -112,17 +123,7 @@ final class AudioRecorder {
         }
 
         if status == .haveData {
-            appendFloatBuffer(convertedBuffer)
-        }
-    }
-
-    private func appendFloatBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
-        let frameLength = Int(buffer.frameLength)
-
-        for i in 0..<frameLength {
-            var sample = channelData[i]
-            audioData.append(Data(bytes: &sample, count: 4))
+            audioBuffer.appendFloat(convertedBuffer)
         }
     }
 
@@ -156,8 +157,8 @@ final class AudioRecorder {
 
         // fmt chunk
         wavData.append("fmt ".data(using: .ascii)!)
-        wavData.append(withUnsafeBytes(of: UInt32(16).littleEndian) { Data($0) }) // chunk size
-        wavData.append(withUnsafeBytes(of: UInt16(1).littleEndian) { Data($0) })  // PCM format
+        wavData.append(withUnsafeBytes(of: UInt32(16).littleEndian) { Data($0) })
+        wavData.append(withUnsafeBytes(of: UInt16(1).littleEndian) { Data($0) })
         wavData.append(withUnsafeBytes(of: numChannels.littleEndian) { Data($0) })
         wavData.append(withUnsafeBytes(of: sampleRateInt.littleEndian) { Data($0) })
         wavData.append(withUnsafeBytes(of: byteRate.littleEndian) { Data($0) })
@@ -170,5 +171,32 @@ final class AudioRecorder {
         wavData.append(int16Data)
 
         return wavData
+    }
+}
+
+// Thread-safe audio data accumulator
+private final class AudioBuffer: @unchecked Sendable {
+    private let lock = OSAllocatedUnfairLock(initialState: Data())
+
+    func reset() {
+        lock.withLock { $0 = Data() }
+    }
+
+    func appendFloat(_ buffer: AVAudioPCMBuffer) {
+        guard let channelData = buffer.floatChannelData?[0] else { return }
+        let frameLength = Int(buffer.frameLength)
+
+        // Build data chunk outside the lock
+        var chunk = Data(capacity: frameLength * 4)
+        for i in 0..<frameLength {
+            var sample = channelData[i]
+            chunk.append(Data(bytes: &sample, count: 4))
+        }
+
+        lock.withLock { $0.append(chunk) }
+    }
+
+    func getData() -> Data {
+        lock.withLock { $0 }
     }
 }

@@ -43,14 +43,19 @@ struct SettingsView: View {
             .frame(width: 180)
 
             if let id = selectedPresetID,
-               let index = appState.presetStore.presets.firstIndex(where: { $0.id == id }) {
+               appState.presetStore.presets.contains(where: { $0.id == id }) {
                 let presetBinding = Binding(
-                    get: { appState.presetStore.presets[index] },
+                    get: {
+                        // Look up by ID every time — safe even if array changes
+                        appState.presetStore.presets.first(where: { $0.id == id })
+                            ?? Preset.makeDefault()
+                    },
                     set: { appState.presetStore.update($0) }
                 )
+                let preset = appState.presetStore.presets.first(where: { $0.id == id })!
                 PresetEditorView(
                     preset: presetBinding,
-                    conflictingPreset: appState.presetStore.hasHotkeyConflict(appState.presetStore.presets[index])
+                    conflictingPreset: appState.presetStore.hasHotkeyConflict(preset)
                 )
             } else {
                 Text("Select a preset")
