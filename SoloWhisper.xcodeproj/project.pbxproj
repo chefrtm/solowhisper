@@ -20,6 +20,18 @@
 		011 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* KeychainManager.swift */; };
 		012 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 501 /* WhisperKit */; };
 		44B1704A2F34D1480009988E /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B170492F34D1480009988E /* MenuBarIcon.swift */; };
+		013 /* Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113 /* Preset.swift */; };
+		014 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114 /* PresetStore.swift */; };
+		015 /* TranscriptionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115 /* TranscriptionRecord.swift */; };
+		016 /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* HistoryStore.swift */; };
+		017 /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117 /* SoundManager.swift */; };
+		018 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* LLMProvider.swift */; };
+		019 /* OpenAILLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119 /* OpenAILLMProvider.swift */; };
+		020 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* HotkeyRecorderView.swift */; };
+		021 /* PresetEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121 /* PresetEditorView.swift */; };
+		022 /* PresetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122 /* PresetListView.swift */; };
+		023 /* APIKeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123 /* APIKeysView.swift */; };
+		024 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* HistoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +49,18 @@
 		112 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200 /* SoloWhisper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoloWhisper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		44B170492F34D1480009988E /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
+		113 /* Preset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preset.swift; sourceTree = "<group>"; };
+		114 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
+		115 /* TranscriptionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRecord.swift; sourceTree = "<group>"; };
+		116 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
+		117 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
+		118 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
+		119 /* OpenAILLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAILLMProvider.swift; sourceTree = "<group>"; };
+		120 /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
+		121 /* PresetEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetEditorView.swift; sourceTree = "<group>"; };
+		122 /* PresetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetListView.swift; sourceTree = "<group>"; };
+		123 /* APIKeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeysView.swift; sourceTree = "<group>"; };
+		124 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +129,7 @@
 				432 /* Hotkeys */,
 				433 /* TextInsertion */,
 				434 /* Security */,
+				435 /* LLM */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -113,6 +138,10 @@
 			isa = PBXGroup;
 			children = (
 				102 /* AppState.swift */,
+				113 /* Preset.swift */,
+				114 /* PresetStore.swift */,
+				115 /* TranscriptionRecord.swift */,
+				116 /* HistoryStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -137,6 +166,11 @@
 			isa = PBXGroup;
 			children = (
 				104 /* SettingsView.swift */,
+				120 /* HotkeyRecorderView.swift */,
+				121 /* PresetEditorView.swift */,
+				122 /* PresetListView.swift */,
+				123 /* APIKeysView.swift */,
+				124 /* HistoryView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -145,6 +179,7 @@
 			isa = PBXGroup;
 			children = (
 				105 /* AudioRecorder.swift */,
+				117 /* SoundManager.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -181,6 +216,15 @@
 				111 /* KeychainManager.swift */,
 			);
 			path = Security;
+			sourceTree = "<group>";
+		};
+		435 /* LLM */ = {
+			isa = PBXGroup;
+			children = (
+				118 /* LLMProvider.swift */,
+				119 /* OpenAILLMProvider.swift */,
+			);
+			path = LLM;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -269,6 +313,18 @@
 				009 /* HotkeyManager.swift in Sources */,
 				010 /* TextInserter.swift in Sources */,
 				011 /* KeychainManager.swift in Sources */,
+				013 /* Preset.swift in Sources */,
+				014 /* PresetStore.swift in Sources */,
+				015 /* TranscriptionRecord.swift in Sources */,
+				016 /* HistoryStore.swift in Sources */,
+				017 /* SoundManager.swift in Sources */,
+				018 /* LLMProvider.swift in Sources */,
+				019 /* OpenAILLMProvider.swift in Sources */,
+				020 /* HotkeyRecorderView.swift in Sources */,
+				021 /* PresetEditorView.swift in Sources */,
+				022 /* PresetListView.swift in Sources */,
+				023 /* APIKeysView.swift in Sources */,
+				024 /* HistoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
