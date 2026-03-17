@@ -48,7 +48,7 @@ final class PresetStore: ObservableObject {
         return (try? JSONDecoder().decode([Preset].self, from: data)) ?? []
     }
 
-    func save() {
+    private func save() {
         guard let data = try? JSONEncoder().encode(presets) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
     }

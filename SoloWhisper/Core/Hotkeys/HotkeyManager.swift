@@ -102,7 +102,7 @@ final class HotkeyManager {
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
 
         if let runLoopSource = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: eventTap, enable: true)
             print("✅ Hotkey monitor active (multi-preset)")
         }
@@ -134,10 +134,8 @@ final class HotkeyManager {
                 }
             } else if !fnPressed && wasPressed {
                 _pressedPresets.remove(preset.id)
-                if preset.mode == .pushToTalk {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.callback(preset, false)
-                    }
+                DispatchQueue.main.async { [weak self] in
+                    self?.callback(preset, false)
                 }
             }
         }
@@ -168,10 +166,8 @@ final class HotkeyManager {
                 }
             } else if !isDown && wasPressed {
                 _pressedPresets.remove(preset.id)
-                if preset.mode == .pushToTalk {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.callback(preset, false)
-                    }
+                DispatchQueue.main.async { [weak self] in
+                    self?.callback(preset, false)
                 }
             }
         }
@@ -179,7 +175,7 @@ final class HotkeyManager {
 
     func stop() {
         if let runLoopSource = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             self.runLoopSource = nil
         }
         if let eventTap = eventTap {
