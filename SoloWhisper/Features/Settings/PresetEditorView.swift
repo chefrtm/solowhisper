@@ -39,6 +39,10 @@ struct PresetEditorView: View {
                 }
 
                 Toggle("Auto-insert text", isOn: $preset.autoInsertText)
+
+                if preset.autoInsertText {
+                    Toggle("Restore previous clipboard", isOn: $preset.restoreClipboard)
+                }
             }
 
             Section("Hotkey") {

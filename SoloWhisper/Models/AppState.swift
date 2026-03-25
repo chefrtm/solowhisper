@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var statusMessage: String = "Ready"
     @Published var errorMessage: String?
     @Published var activePreset: Preset?
+    private var isStoppingRecording = false
 
     // Stores
     let presetStore: PresetStore
@@ -86,7 +87,11 @@ final class AppState: ObservableObject {
     // MARK: - Recording Pipeline
 
     func startRecording(with preset: Preset) {
-        guard !isRecording else { return }
+        print("🔴 startRecording called | isRecording=\(isRecording) isStoppingRecording=\(isStoppingRecording)")
+        guard !isRecording, !isStoppingRecording else {
+            print("🔴 startRecording BLOCKED by guard")
+            return
+        }
 
         // Pre-flight: check API keys
         if preset.engineType == .cloud {
@@ -105,14 +110,17 @@ final class AppState: ObservableObject {
         }
 
         activePreset = preset
-        SoundManager.play(preset.startSound)
 
         do {
+            print("🔴 audioRecorder.startRecording()...")
             try audioRecorder.startRecording()
+            print("🔴 audioRecorder.startRecording() OK")
+            SoundManager.play(preset.startSound)
             isRecording = true
             statusMessage = "Recording..."
             errorMessage = nil
         } catch {
+            print("🔴 audioRecorder.startRecording() FAILED: \(error)")
             errorMessage = "Failed to start recording: \(error.localizedDescription)"
             statusMessage = "Error"
             activePreset = nil
@@ -120,15 +128,24 @@ final class AppState: ObservableObject {
     }
 
     func stopRecordingAndTranscribe() {
-        guard isRecording, let preset = activePreset else { return }
+        print("⏹️ stopRecording called | isRecording=\(isRecording)")
+        guard isRecording, let preset = activePreset else {
+            print("⏹️ stopRecording BLOCKED by guard")
+            return
+        }
 
         isRecording = false
-        SoundManager.play(preset.endSound)
+        isStoppingRecording = true
+        activePreset = nil
         statusMessage = "Transcribing..."
 
         Task {
             do {
+                print("⏹️ audioRecorder.stopRecording()...")
                 let audioData = try await audioRecorder.stopRecording()
+                print("⏹️ audioRecorder.stopRecording() OK, size=\(audioData.count)")
+                isStoppingRecording = false
+                SoundManager.play(preset.endSound)
 
                 // Transcribe
                 let engine = resolveEngine(for: preset)
@@ -167,15 +184,14 @@ final class AppState: ObservableObject {
 
                 // Output
                 if preset.autoInsertText && !finalText.isEmpty {
-                    textInserter?.insertText(finalText)
+                    textInserter?.insertText(finalText, restoreClipboard: preset.restoreClipboard)
                 }
 
             } catch {
+                isStoppingRecording = false
                 errorMessage = error.localizedDescription
                 statusMessage = "Error"
             }
-
-            activePreset = nil
         }
     }
 

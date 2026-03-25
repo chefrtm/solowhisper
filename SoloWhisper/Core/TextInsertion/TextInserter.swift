@@ -4,12 +4,17 @@ import AppKit
 final class TextInserter {
     private let pasteboard = NSPasteboard.general
 
-    func insertText(_ text: String) {
+    func insertText(_ text: String, restoreClipboard: Bool = false) {
         // Save current clipboard contents
-        let savedItems = pasteboard.pasteboardItems?.compactMap { item -> (NSPasteboard.PasteboardType, Data)? in
-            guard let type = item.types.first, let data = item.data(forType: type) else { return nil }
-            return (type, data)
-        } ?? []
+        let savedItems: [(NSPasteboard.PasteboardType, Data)]
+        if restoreClipboard {
+            savedItems = pasteboard.pasteboardItems?.compactMap { item -> (NSPasteboard.PasteboardType, Data)? in
+                guard let type = item.types.first, let data = item.data(forType: type) else { return nil }
+                return (type, data)
+            } ?? []
+        } else {
+            savedItems = []
+        }
 
         // Set transcription text
         pasteboard.clearContents()
@@ -18,11 +23,13 @@ final class TextInserter {
         // Simulate Cmd+V
         simulatePaste()
 
-        // Restore previous clipboard after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [pasteboard] in
-            pasteboard.clearContents()
-            for (type, data) in savedItems {
-                pasteboard.setData(data, forType: type)
+        // Restore previous clipboard after a delay (enough for clipboard managers to capture)
+        if restoreClipboard {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [pasteboard] in
+                pasteboard.clearContents()
+                for (type, data) in savedItems {
+                    pasteboard.setData(data, forType: type)
+                }
             }
         }
     }

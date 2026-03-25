@@ -21,8 +21,9 @@ enum AudioRecorderError: LocalizedError {
 
 @MainActor
 final class AudioRecorder {
-    private var audioEngine: AVAudioEngine?
+    private let audioEngine = AVAudioEngine()
     private var isRecording = false
+    private var hasTap = false
 
     private let sampleRate: Double = 16000
     private let channels: AVAudioChannelCount = 1
@@ -31,7 +32,10 @@ final class AudioRecorder {
     private let audioBuffer = AudioBuffer()
 
     func startRecording() throws {
-        guard !isRecording else { return }
+        // Force-stop previous session if still active
+        if isRecording || hasTap {
+            forceStop()
+        }
 
         let permission = AVCaptureDevice.authorizationStatus(for: .audio)
         guard permission == .authorized else {
@@ -42,11 +46,6 @@ final class AudioRecorder {
         }
 
         audioBuffer.reset()
-        audioEngine = AVAudioEngine()
-
-        guard let audioEngine = audioEngine else {
-            throw AudioRecorderError.engineStartFailed
-        }
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -70,31 +69,37 @@ final class AudioRecorder {
                 into: audioBuffer
             )
         }
+        hasTap = true
 
         do {
             try audioEngine.start()
             isRecording = true
         } catch {
-            audioEngine.stop()
-            inputNode.removeTap(onBus: 0)
+            forceStop()
             throw AudioRecorderError.engineStartFailed
         }
     }
 
     func stopRecording() async throws -> Data {
-        guard isRecording, let audioEngine = audioEngine else {
+        guard isRecording else {
             throw AudioRecorderError.noAudioData
         }
 
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
-        isRecording = false
+        forceStop()
 
         let pcmData = audioBuffer.getData()
         let wavData = createWAVFile(from: pcmData)
-        self.audioEngine = nil
-
         return wavData
+    }
+
+    private func forceStop() {
+        if hasTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasTap = false
+        }
+        audioEngine.stop()
+        audioEngine.reset()
+        isRecording = false
     }
 
     // Static method — no self capture, safe to call from audio thread

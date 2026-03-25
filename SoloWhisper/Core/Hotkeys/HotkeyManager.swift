@@ -10,8 +10,15 @@ final class HotkeyManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    // Lock-free thread-safe preset access (no queue contention in event tap)
-    private let lock = OSAllocatedUnfairLock(initialState: ([Preset](), Set<UUID>()))
+    // Thread-safe state: (presets, pressedPresetIDs, lastActionTimestampNanos)
+    private let lock = OSAllocatedUnfairLock(initialState: (
+        [Preset](),
+        Set<UUID>(),
+        UInt64(0)
+    ))
+
+    // Minimum interval between press/release actions (prevents rapid-fire race conditions)
+    private let debounceNanos: UInt64 = 200_000_000 // 200ms
 
     init(callback: @escaping HotkeyCallback) {
         self.callback = callback
@@ -103,12 +110,11 @@ final class HotkeyManager {
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) {
-        // Extract event data before taking the lock (CGEvent access is fast)
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         let isDown = type == .keyDown
+        let now = DispatchTime.now().uptimeNanoseconds
 
-        // Minimal time under lock — just check presets and update press state
         let actions: [(Preset, Bool)] = lock.withLock { state in
             let presets = state.0
             var result: [(Preset, Bool)] = []
@@ -118,10 +124,14 @@ final class HotkeyManager {
                 for preset in presets where preset.isFnKey {
                     let wasPressed = state.1.contains(preset.id)
                     if fnPressed && !wasPressed {
+                        // Debounce: ignore if too soon after last action
+                        guard now - state.2 >= debounceNanos else { continue }
                         state.1.insert(preset.id)
+                        state.2 = now
                         result.append((preset, true))
                     } else if !fnPressed && wasPressed {
                         state.1.remove(preset.id)
+                        state.2 = now
                         result.append((preset, false))
                     }
                 }
@@ -133,15 +143,18 @@ final class HotkeyManager {
                     guard let presetKeyCode = preset.hotkeyKeyCode,
                           presetKeyCode == keyCode else { continue }
 
-                    let presetFlags = CGEventFlags(rawValue: preset.hotkeyModifiers)
-                    guard eventRelevant == presetFlags.intersection(relevantMask) else { continue }
-
                     let wasPressed = state.1.contains(preset.id)
                     if isDown && !wasPressed {
+                        // Debounce: ignore if too soon after last action
+                        guard now - state.2 >= debounceNanos else { continue }
+                        let presetFlags = CGEventFlags(rawValue: preset.hotkeyModifiers)
+                        guard eventRelevant == presetFlags.intersection(relevantMask) else { continue }
                         state.1.insert(preset.id)
+                        state.2 = now
                         result.append((preset, true))
                     } else if !isDown && wasPressed {
                         state.1.remove(preset.id)
+                        state.2 = now
                         result.append((preset, false))
                     }
                 }
@@ -150,7 +163,6 @@ final class HotkeyManager {
             return result
         }
 
-        // Dispatch callbacks outside the lock
         for (preset, pressed) in actions {
             DispatchQueue.main.async { [weak self] in
                 self?.callback(preset, pressed)
@@ -167,7 +179,10 @@ final class HotkeyManager {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             self.eventTap = nil
         }
-        lock.withLock { state in state.1.removeAll() }
+        lock.withLock { state in
+            state.1.removeAll()
+            state.2 = 0
+        }
     }
 
     static var hasAccessibilityPermission: Bool {

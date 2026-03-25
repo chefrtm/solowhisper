@@ -7,6 +7,13 @@ final class CloudEngine: TranscriptionEngine {
     private let apiKey: String
     private let endpoint = "https://api.openai.com/v1/audio/transcriptions"
 
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForResource = 360
+        return URLSession(configuration: config)
+    }()
+
     init(apiKey: String) {
         self.apiKey = apiKey
     }
@@ -14,6 +21,11 @@ final class CloudEngine: TranscriptionEngine {
     func transcribe(audioData: Data, language: String) async throws -> String {
         guard !apiKey.isEmpty else {
             throw TranscriptionError.apiKeyMissing
+        }
+
+        // WAV header is 44 bytes — anything at or below that is empty audio
+        guard audioData.count > 1000 else {
+            throw TranscriptionError.networkError("Recording too short")
         }
 
         let boundary = UUID().uuidString
@@ -54,7 +66,7 @@ final class CloudEngine: TranscriptionEngine {
         logger.info("📦 Audio size: \(audioData.count) bytes")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await Self.session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 logger.error("❌ Invalid response type")

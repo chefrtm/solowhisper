@@ -34,6 +34,7 @@ struct Preset: Codable, Identifiable, Equatable {
 
     // Behavior
     var autoInsertText: Bool = true
+    var restoreClipboard: Bool = false
 
     static func makeDefault() -> Preset {
         Preset(

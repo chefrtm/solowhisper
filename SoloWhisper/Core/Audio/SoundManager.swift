@@ -6,8 +6,13 @@ final class SoundManager {
         "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
     ]
 
+    private static var currentSound: NSSound?
+
     static func play(_ soundName: String?) {
         guard let name = soundName else { return }
-        NSSound(named: name)?.play()
+        currentSound?.stop()
+        let sound = NSSound(named: name)
+        currentSound = sound
+        sound?.play()
     }
 }
