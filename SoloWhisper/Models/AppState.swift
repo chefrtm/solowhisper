@@ -116,6 +116,9 @@ final class AppState: ObservableObject {
             try audioRecorder.startRecording()
             print("🔴 audioRecorder.startRecording() OK")
             SoundManager.play(preset.startSound)
+            if preset.muteSystemAudio {
+                SystemAudioDucker.shared.mute()
+            }
             isRecording = true
             statusMessage = "Recording..."
             errorMessage = nil
@@ -145,6 +148,7 @@ final class AppState: ObservableObject {
                 let audioData = try await audioRecorder.stopRecording()
                 print("⏹️ audioRecorder.stopRecording() OK, size=\(audioData.count)")
                 isStoppingRecording = false
+                SystemAudioDucker.shared.unmute()
                 SoundManager.play(preset.endSound)
 
                 // Transcribe
@@ -189,6 +193,7 @@ final class AppState: ObservableObject {
 
             } catch {
                 isStoppingRecording = false
+                SystemAudioDucker.shared.unmute()
                 errorMessage = error.localizedDescription
                 statusMessage = "Error"
             }

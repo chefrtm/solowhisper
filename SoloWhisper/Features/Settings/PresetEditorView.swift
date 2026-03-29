@@ -62,6 +62,7 @@ struct PresetEditorView: View {
             Section("Sounds") {
                 soundPicker("Start sound", selection: $preset.startSound)
                 soundPicker("End sound", selection: $preset.endSound)
+                Toggle("Mute system audio while recording", isOn: $preset.muteSystemAudio)
             }
 
             Section("Post-processing") {
