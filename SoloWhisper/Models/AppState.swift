@@ -117,7 +117,8 @@ final class AppState: ObservableObject {
             print("🔴 audioRecorder.startRecording() OK")
             SoundManager.play(preset.startSound)
             if preset.muteSystemAudio {
-                SystemAudioDucker.shared.mute()
+                let delay: TimeInterval = preset.startSound != nil ? 0.3 : 0
+                SystemAudioDucker.shared.muteAfter(delay: delay)
             }
             isRecording = true
             statusMessage = "Recording..."

@@ -7,8 +7,23 @@ final class SystemAudioDucker {
 
     private var previousMuteState: UInt32 = 0
     private var isDucking = false
+    private var pendingMute: DispatchWorkItem?
 
     private init() {}
+
+    /// Schedule mute after a delay (to let a start sound finish).
+    func muteAfter(delay: TimeInterval) {
+        pendingMute?.cancel()
+        if delay > 0 {
+            let work = DispatchWorkItem { [weak self] in
+                self?.mute()
+            }
+            pendingMute = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        } else {
+            mute()
+        }
+    }
 
     /// Mute the default output device, saving previous state.
     func mute() {
@@ -24,6 +39,9 @@ final class SystemAudioDucker {
 
     /// Restore the default output device to its previous mute state.
     func unmute() {
+        pendingMute?.cancel()
+        pendingMute = nil
+
         guard isDucking else { return }
         isDucking = false
 
