@@ -88,9 +88,9 @@ final class HotkeyManager {
                 }
 
                 let manager = Unmanaged<HotkeyManager>.fromOpaque(userInfo).takeUnretainedValue()
-                manager.handleEvent(type: type, event: event)
+                let consumed = manager.handleEvent(type: type, event: event)
 
-                return Unmanaged.passUnretained(event)
+                return consumed ? nil : Unmanaged.passUnretained(event)
             },
             userInfo: userInfo
         )
@@ -105,11 +105,12 @@ final class HotkeyManager {
         if let runLoopSource = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: eventTap, enable: true)
-            print("✅ Hotkey monitor active (listen-only, multi-preset)")
+            print("✅ Hotkey monitor active (multi-preset)")
         }
     }
 
-    private func handleEvent(type: CGEventType, event: CGEvent) {
+    /// Returns true if the event was consumed by a hotkey.
+    private func handleEvent(type: CGEventType, event: CGEvent) -> Bool {
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         let isDown = type == .keyDown
@@ -168,6 +169,8 @@ final class HotkeyManager {
                 self?.callback(preset, pressed)
             }
         }
+
+        return !actions.isEmpty
     }
 
     func stop() {

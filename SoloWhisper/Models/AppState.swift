@@ -35,7 +35,6 @@ final class AppState: ObservableObject {
         self.textInserter = TextInserter()
 
         setupHotkeyManager()
-
         // Re-register hotkeys when presets change
         presetStore.$presets
             .sink { [weak self] presets in
