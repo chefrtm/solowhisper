@@ -33,22 +33,34 @@ Under the hood: audio is captured at 16kHz mono via AVAudioEngine, sent to OpenA
 
 ## Installation
 
-1. Download `SoloWhisper.app.zip` from the [latest release](../../releases/latest)
+### Homebrew (recommended)
+
+```bash
+brew install --cask chefrtm/solowhisper/solowhisper
+```
+
+That's it — the app lands in your Applications folder, ready to go.
+
+### Manual Download
+
+1. Download `SoloWhisper.app.zip` from the [latest release](https://github.com/chefrtm/solowhisper/releases/latest)
 2. Unzip and drag **SoloWhisper.app** to your Applications folder
-3. Open the app — if macOS shows a security warning, go to **System Settings → Privacy & Security** and click **Open Anyway**
-4. Grant **Microphone** and **Accessibility** permissions when prompted
-5. Click the menu bar icon, open Settings, and add your OpenAI API key
-6. Configure your first preset — pick a hotkey, language, and engine
-7. Start talking
+3. If macOS shows a security warning, go to **System Settings → Privacy & Security** and click **Open Anyway**
+
+### Setup
+
+1. Open the app — it appears as an icon in your menu bar
+2. Grant **Microphone** and **Accessibility** permissions when prompted
+3. Click the menu bar icon → Settings → API Keys → add your OpenAI API key
+4. Configure your first preset — pick a hotkey, language, and engine
+5. Start talking
 
 ### Requirements
 
 - macOS 14 Sonoma or later
-- OpenAI API key (for cloud transcription and LLM features; not needed for local WhisperKit engine)
+- OpenAI API key (for cloud transcription and LLM post-processing; not needed if you only use the local WhisperKit engine)
 
 ### Building from Source
-
-If you prefer to build it yourself:
 
 ```bash
 git clone https://github.com/chefrtm/solowhisper.git
