@@ -15,3 +15,6 @@ Packages/
 
 # Superpowers
 .superpowers/
+
+# Claude Code
+.claude/
