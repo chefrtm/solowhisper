@@ -1,11 +1,12 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.solowhisper", category: "CloudEngine")
+private let logger = Logger(subsystem: "com.solowhisper", category: "OpenAICompatibleEngine")
 
-final class CloudEngine: TranscriptionEngine {
+final class OpenAICompatibleEngine: TranscriptionEngine {
     private let apiKey: String
-    private let endpoint = "https://api.openai.com/v1/audio/transcriptions"
+    private let endpoint: String
+    private let model: String
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -14,8 +15,28 @@ final class CloudEngine: TranscriptionEngine {
         return URLSession(configuration: config)
     }()
 
-    init(apiKey: String) {
+    init(apiKey: String, endpoint: String, model: String) {
         self.apiKey = apiKey
+        self.endpoint = endpoint
+        self.model = model
+    }
+
+    /// Convenience: OpenAI Whisper
+    static func openAI(apiKey: String) -> OpenAICompatibleEngine {
+        OpenAICompatibleEngine(
+            apiKey: apiKey,
+            endpoint: "https://api.openai.com/v1/audio/transcriptions",
+            model: "gpt-4o-mini-transcribe"
+        )
+    }
+
+    /// Convenience: Groq Whisper
+    static func groq(apiKey: String) -> OpenAICompatibleEngine {
+        OpenAICompatibleEngine(
+            apiKey: apiKey,
+            endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+            model: "whisper-large-v3-turbo"
+        )
     }
 
     func transcribe(audioData: Data, language: String) async throws -> String {
@@ -39,7 +60,7 @@ final class CloudEngine: TranscriptionEngine {
         // Model parameter
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
-        body.append("gpt-4o-mini-transcribe\r\n".data(using: .utf8)!)
+        body.append("\(model)\r\n".data(using: .utf8)!)
 
         // Language parameter (if not auto)
         if language != "auto" {
@@ -60,9 +81,8 @@ final class CloudEngine: TranscriptionEngine {
 
         request.httpBody = body
 
-        logger.info("🚀 Sending request to OpenAI API")
-        logger.info("📍 Endpoint: \(self.endpoint)")
-        logger.info("🤖 Model: gpt-4o-mini-transcribe")
+        logger.info("🚀 Sending request to \(self.endpoint)")
+        logger.info("🤖 Model: \(self.model)")
         logger.info("📦 Audio size: \(audioData.count) bytes")
 
         do {
@@ -84,7 +104,7 @@ final class CloudEngine: TranscriptionEngine {
                 throw TranscriptionError.networkError("HTTP \(httpResponse.statusCode)")
             }
 
-            let result = try JSONDecoder().decode(TranscriptionResponse.self, from: data)
+            let result = try JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data)
             logger.info("✅ Transcription successful: \(result.text.prefix(50))...")
             return result.text
 
@@ -96,6 +116,6 @@ final class CloudEngine: TranscriptionEngine {
     }
 }
 
-private struct TranscriptionResponse: Decodable {
+private struct OpenAITranscriptionResponse: Decodable {
     let text: String
 }

@@ -1,16 +1,17 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.solowhisper", category: "OpenAILLM")
+private let logger = Logger(subsystem: "com.solowhisper", category: "LLM")
 
-final class OpenAILLMProvider: LLMProvider {
+final class OpenAICompatibleLLMProvider: LLMProvider {
     private let apiKey: String
     private let model: String
-    private let endpoint = "https://api.openai.com/v1/chat/completions"
+    private let endpoint: String
 
-    init(apiKey: String, model: String = "gpt-4o-mini") {
+    init(apiKey: String, model: String, endpoint: String = "https://api.openai.com/v1/chat/completions") {
         self.apiKey = apiKey
         self.model = model
+        self.endpoint = endpoint
     }
 
     func complete(system: String, user: String) async throws -> String {
@@ -33,7 +34,7 @@ final class OpenAILLMProvider: LLMProvider {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        logger.info("Sending LLM request, model: \(self.model)")
+        logger.info("Sending LLM request to \(self.endpoint), model: \(self.model)")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)

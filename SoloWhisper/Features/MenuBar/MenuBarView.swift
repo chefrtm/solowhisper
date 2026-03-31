@@ -153,10 +153,29 @@ struct MenuBarView: View {
         return keyMap[keyCode] ?? "Key\(keyCode)"
     }
 
+    /// Returns the name of the first provider that's missing an API key (based on configured presets), or nil.
+    private var missingAPIKeyProvider: String? {
+        let providers: Set<String> = Set(appState.presetStore.presets.compactMap { preset in
+            switch preset.engineType {
+            case .cloud: return "OpenAI"
+            case .groq: return "Groq"
+            case .deepgram: return "DeepGram"
+            case .whisperKit: return nil
+            }
+        })
+        let keychainMap = ["OpenAI": "openai", "Groq": "groq", "DeepGram": "deepgram"]
+        for name in providers.sorted() {
+            if let provider = keychainMap[name], !appState.hasAPIKey(provider: provider) {
+                return name
+            }
+        }
+        return nil
+    }
+
     private var footerSection: some View {
         HStack {
-            if !appState.hasAPIKey(provider: "openai") {
-                Text("API Key not set")
+            if let missing = missingAPIKeyProvider {
+                Text("\(missing) API key not set")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }

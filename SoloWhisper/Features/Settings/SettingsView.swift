@@ -89,7 +89,7 @@ struct SettingsView: View {
                 Text("Powered by")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                Text("OpenAI Whisper & WhisperKit")
+                Text("OpenAI Whisper, Groq, DeepGram & WhisperKit")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

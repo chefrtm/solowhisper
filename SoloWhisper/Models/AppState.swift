@@ -9,7 +9,10 @@ final class AppState: ObservableObject {
     @Published var statusMessage: String = "Ready"
     @Published var errorMessage: String?
     @Published var activePreset: Preset?
+    @Published var audioLevel: Float = 0
+    @Published var showRecordingPill: Bool = true
     private var isStoppingRecording = false
+    private var audioLevelTimer: Timer?
 
     // Stores
     let presetStore: PresetStore
@@ -21,6 +24,9 @@ final class AppState: ObservableObject {
     var hotkeyManager: HotkeyManager?
     var textInserter: TextInserter?
 
+    // Overlay
+    let overlayController = RecordingOverlayController()
+
     // Cached engines (avoid re-creating expensive instances)
     private var cachedWhisperKitEngine: WhisperKitEngine?
 
@@ -29,6 +35,8 @@ final class AppState: ObservableObject {
     init() {
         // Migrate v1 keychain key to provider-based if needed
         keychainManager.migrateV1KeyIfNeeded()
+
+        showRecordingPill = UserDefaults.standard.object(forKey: "showRecordingPill") as? Bool ?? true
 
         self.presetStore = PresetStore()
         self.historyStore = HistoryStore()
@@ -54,6 +62,18 @@ final class AppState: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+
+        // Persist pill toggle
+        $showRecordingPill
+            .dropFirst() // skip initial value
+            .sink { UserDefaults.standard.set($0, forKey: "showRecordingPill") }
+            .store(in: &cancellables)
+
+        // Bind overlay to state changes
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.overlayController.bind(to: self)
+        }
     }
 
     // MARK: - Hotkey Setup
@@ -86,23 +106,25 @@ final class AppState: ObservableObject {
     // MARK: - Recording Pipeline
 
     func startRecording(with preset: Preset) {
-        print("🔴 startRecording called | isRecording=\(isRecording) isStoppingRecording=\(isStoppingRecording)")
+
         guard !isRecording, !isStoppingRecording else {
-            print("🔴 startRecording BLOCKED by guard")
+
             return
         }
 
-        // Pre-flight: check API keys
-        if preset.engineType == .cloud {
-            guard keychainManager.getAPIKey(provider: "openai") != nil else {
-                errorMessage = "OpenAI API key not set. Please configure in Settings."
+        // Pre-flight: check API keys for STT engine
+        if let provider = sttKeyProvider(for: preset.engineType) {
+            guard keychainManager.getAPIKey(provider: provider) != nil else {
+                errorMessage = "\(provider.capitalized) API key not set. Please configure in Settings."
                 statusMessage = "Error"
                 return
             }
         }
         if preset.llmPrompt != nil {
-            guard keychainManager.getAPIKey(provider: "openai") != nil else {
-                errorMessage = "OpenAI API key required for post-processing. Please configure in Settings."
+            let llmModel = preset.llmModel ?? "gpt-4o-mini"
+            let llmProvider = LLMModelRegistry.info(for: llmModel)?.provider ?? "openai"
+            guard keychainManager.getAPIKey(provider: llmProvider) != nil else {
+                errorMessage = "\(llmProvider.capitalized) API key required for post-processing."
                 statusMessage = "Error"
                 return
             }
@@ -111,9 +133,9 @@ final class AppState: ObservableObject {
         activePreset = preset
 
         do {
-            print("🔴 audioRecorder.startRecording()...")
+
             try audioRecorder.startRecording()
-            print("🔴 audioRecorder.startRecording() OK")
+
             SoundManager.play(preset.startSound)
             if preset.muteSystemAudio {
                 let delay: TimeInterval = preset.startSound != nil ? 0.3 : 0
@@ -122,8 +144,9 @@ final class AppState: ObservableObject {
             isRecording = true
             statusMessage = "Recording..."
             errorMessage = nil
+            startAudioLevelTimer()
         } catch {
-            print("🔴 audioRecorder.startRecording() FAILED: \(error)")
+
             errorMessage = "Failed to start recording: \(error.localizedDescription)"
             statusMessage = "Error"
             activePreset = nil
@@ -131,9 +154,9 @@ final class AppState: ObservableObject {
     }
 
     func stopRecordingAndTranscribe() {
-        print("⏹️ stopRecording called | isRecording=\(isRecording)")
+
         guard isRecording, let preset = activePreset else {
-            print("⏹️ stopRecording BLOCKED by guard")
+
             return
         }
 
@@ -141,12 +164,13 @@ final class AppState: ObservableObject {
         isStoppingRecording = true
         activePreset = nil
         statusMessage = "Transcribing..."
+        stopAudioLevelTimer()
 
         Task {
             do {
-                print("⏹️ audioRecorder.stopRecording()...")
+
                 let audioData = try await audioRecorder.stopRecording()
-                print("⏹️ audioRecorder.stopRecording() OK, size=\(audioData.count)")
+
                 isStoppingRecording = false
                 SystemAudioDucker.shared.unmute()
                 SoundManager.play(preset.endSound)
@@ -160,8 +184,8 @@ final class AppState: ObservableObject {
                 if let prompt = preset.llmPrompt, !prompt.isEmpty {
                     statusMessage = "Processing..."
                     do {
-                        let apiKey = keychainManager.getAPIKey(provider: "openai") ?? ""
-                        let provider = OpenAILLMProvider(apiKey: apiKey, model: preset.llmModel ?? "gpt-4o-mini")
+                        let llmModel = preset.llmModel ?? "gpt-4o-mini"
+                        let provider = resolveLLMProvider(model: llmModel)
                         processedText = try await provider.complete(system: prompt, user: rawText)
                     } catch {
                         errorMessage = "Post-processing failed: \(error.localizedDescription)"
@@ -206,13 +230,39 @@ final class AppState: ObservableObject {
         switch preset.engineType {
         case .cloud:
             let apiKey = keychainManager.getAPIKey(provider: "openai") ?? ""
-            return CloudEngine(apiKey: apiKey)
+            return OpenAICompatibleEngine.openAI(apiKey: apiKey)
+        case .groq:
+            let apiKey = keychainManager.getAPIKey(provider: "groq") ?? ""
+            return OpenAICompatibleEngine.groq(apiKey: apiKey)
+        case .deepgram:
+            let apiKey = keychainManager.getAPIKey(provider: "deepgram") ?? ""
+            return DeepgramEngine(apiKey: apiKey)
         case .whisperKit:
             if cachedWhisperKitEngine == nil {
                 cachedWhisperKitEngine = WhisperKitEngine()
             }
             return cachedWhisperKitEngine!
         }
+    }
+
+    /// Returns the keychain provider name for a given engine type, or nil for local engines.
+    private func sttKeyProvider(for engineType: EngineType) -> String? {
+        switch engineType {
+        case .cloud: return "openai"
+        case .groq: return "groq"
+        case .deepgram: return "deepgram"
+        case .whisperKit: return nil
+        }
+    }
+
+    // MARK: - LLM Resolution
+
+    private func resolveLLMProvider(model: String) -> LLMProvider {
+        let info = LLMModelRegistry.info(for: model)
+        let provider = info?.provider ?? "openai"
+        let endpoint = info?.endpoint ?? "https://api.openai.com/v1/chat/completions"
+        let apiKey = keychainManager.getAPIKey(provider: provider) ?? ""
+        return OpenAICompatibleLLMProvider(apiKey: apiKey, model: model, endpoint: endpoint)
     }
 
     // MARK: - API Key Helpers
@@ -223,5 +273,22 @@ final class AppState: ObservableObject {
 
     func hasAPIKey(provider: String = "openai") -> Bool {
         keychainManager.getAPIKey(provider: provider) != nil
+    }
+
+    // MARK: - Audio Level Timer
+
+    private func startAudioLevelTimer() {
+        audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.audioLevel = self.audioRecorder.currentAudioLevel()
+            }
+        }
+    }
+
+    private func stopAudioLevelTimer() {
+        audioLevelTimer?.invalidate()
+        audioLevelTimer = nil
+        audioLevel = 0
     }
 }
