@@ -32,6 +32,9 @@ struct Preset: Codable, Identifiable, Equatable {
     var llmPrompt: String? = nil
     var llmModel: String? = nil
 
+    // Input device
+    var inputDeviceUID: String? = nil
+
     // Behavior
     var autoInsertText: Bool = true
     var restoreClipboard: Bool = false

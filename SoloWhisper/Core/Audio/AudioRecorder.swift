@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFoundation
 import Foundation
 import os.lock
@@ -31,7 +32,7 @@ final class AudioRecorder {
     // Thread-safe audio buffer — accessed from audio tap thread and main thread
     private let audioBuffer = AudioBuffer()
 
-    func startRecording() throws {
+    func startRecording(inputDeviceUID: String? = nil) throws {
         // Force-stop previous session if still active
         if isRecording || hasTap {
             forceStop()
@@ -46,6 +47,12 @@ final class AudioRecorder {
         }
 
         audioBuffer.reset()
+
+        // Set specific input device before reading format
+        if let uid = inputDeviceUID,
+           let deviceID = AudioDeviceManager.audioDeviceID(forUID: uid) {
+            setInputDevice(deviceID)
+        }
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -90,6 +97,19 @@ final class AudioRecorder {
         let pcmData = audioBuffer.getData()
         let wavData = createWAVFile(from: pcmData)
         return wavData
+    }
+
+    private func setInputDevice(_ deviceID: AudioDeviceID) {
+        guard let audioUnit = audioEngine.inputNode.audioUnit else { return }
+        var devID = deviceID
+        AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &devID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
     }
 
     private func forceStop() {

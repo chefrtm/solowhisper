@@ -5,6 +5,8 @@ struct PresetEditorView: View {
     @EnvironmentObject var appState: AppState
     var conflictingPreset: Preset?
 
+    @State private var inputDevices: [AudioInputDevice] = []
+
     private let languages = [
         ("auto", "Auto-detect"),
         ("en", "English"),
@@ -36,6 +38,13 @@ struct PresetEditorView: View {
                 Picker("Engine", selection: $preset.engineType) {
                     Text("Cloud (OpenAI Whisper)").tag(EngineType.cloud)
                     Text("Local (WhisperKit)").tag(EngineType.whisperKit)
+                }
+
+                Picker("Microphone", selection: $preset.inputDeviceUID) {
+                    Text("System Default").tag(String?.none)
+                    ForEach(inputDevices) { device in
+                        Text(device.name).tag(Optional(device.id))
+                    }
                 }
 
                 Toggle("Auto-insert text", isOn: $preset.autoInsertText)
@@ -100,6 +109,7 @@ struct PresetEditorView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { inputDevices = AudioDeviceManager.availableInputDevices() }
     }
 
     private func soundPicker(_ label: String, selection: Binding<String?>) -> some View {

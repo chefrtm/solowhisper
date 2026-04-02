@@ -111,8 +111,8 @@ final class AppState: ObservableObject {
         activePreset = preset
 
         do {
-            print("🔴 audioRecorder.startRecording()...")
-            try audioRecorder.startRecording()
+            print("🔴 audioRecorder.startRecording(inputDeviceUID: \(preset.inputDeviceUID ?? "default"))...")
+            try audioRecorder.startRecording(inputDeviceUID: preset.inputDeviceUID)
             print("🔴 audioRecorder.startRecording() OK")
             SoundManager.play(preset.startSound)
             if preset.muteSystemAudio {

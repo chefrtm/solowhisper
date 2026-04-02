@@ -33,6 +33,7 @@
 		024 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* HistoryView.swift */; };
 		025 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 125 /* Assets.xcassets */; };
 		026 /* SystemAudioDucker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* SystemAudioDucker.swift */; };
+		027 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* AudioDeviceManager.swift */; };
 		44B1704A2F34D1480009988E /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B170492F34D1480009988E /* MenuBarIcon.swift */; };
 /* End PBXBuildFile section */
 
@@ -63,6 +64,7 @@
 		124 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		125 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		126 /* SystemAudioDucker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioDucker.swift; sourceTree = "<group>"; };
+		127 /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
 		200 /* SoloWhisper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoloWhisper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		44B170492F34D1480009988E /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -183,6 +185,7 @@
 		430 /* Audio */ = {
 			isa = PBXGroup;
 			children = (
+				127 /* AudioDeviceManager.swift */,
 				105 /* AudioRecorder.swift */,
 				117 /* SoundManager.swift */,
 				126 /* SystemAudioDucker.swift */,
@@ -333,6 +336,7 @@
 				023 /* APIKeysView.swift in Sources */,
 				024 /* HistoryView.swift in Sources */,
 				026 /* SystemAudioDucker.swift in Sources */,
+				027 /* AudioDeviceManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
