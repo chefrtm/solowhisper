@@ -36,7 +36,9 @@ struct PresetEditorView: View {
                 }
 
                 Picker("Engine", selection: $preset.engineType) {
-                    Text("Cloud (OpenAI Whisper)").tag(EngineType.cloud)
+                    Text("Cloud (OpenAI)").tag(EngineType.cloud)
+                    Text("Cloud (Groq)").tag(EngineType.groq)
+                    Text("Cloud (DeepGram)").tag(EngineType.deepgram)
                     Text("Local (WhisperKit)").tag(EngineType.whisperKit)
                 }
 
@@ -52,6 +54,8 @@ struct PresetEditorView: View {
                 if preset.autoInsertText {
                     Toggle("Restore previous clipboard", isOn: $preset.restoreClipboard)
                 }
+
+                Toggle("Show recording indicator", isOn: $appState.showRecordingPill)
             }
 
             Section("Hotkey") {
@@ -90,8 +94,13 @@ struct PresetEditorView: View {
                         get: { preset.llmModel ?? "gpt-4o-mini" },
                         set: { preset.llmModel = $0 }
                     )) {
-                        Text("GPT-4o mini").tag("gpt-4o-mini")
-                        Text("GPT-4o").tag("gpt-4o")
+                        ForEach(LLMModelRegistry.grouped, id: \.provider) { group in
+                            Section(group.provider) {
+                                ForEach(group.models, id: \.id) { model in
+                                    Text(model.name).tag(model.id)
+                                }
+                            }
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 4) {

@@ -87,6 +87,10 @@ final class AudioRecorder {
         }
     }
 
+    func currentAudioLevel() -> Float {
+        audioBuffer.currentLevel()
+    }
+
     func stopRecording() async throws -> Data {
         guard isRecording else {
             throw AudioRecorderError.noAudioData
@@ -202,14 +206,24 @@ final class AudioRecorder {
 // Thread-safe audio data accumulator
 private final class AudioBuffer: @unchecked Sendable {
     private let lock = OSAllocatedUnfairLock(initialState: Data())
+    private let levelLock = OSAllocatedUnfairLock(initialState: Float(0))
 
     func reset() {
         lock.withLock { $0 = Data() }
+        levelLock.withLock { $0 = 0 }
     }
 
     func appendFloat(_ buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
+
+        // Compute RMS level
+        var sumSquares: Float = 0
+        for i in 0..<frameLength {
+            sumSquares += channelData[i] * channelData[i]
+        }
+        let rms = frameLength > 0 ? sqrtf(sumSquares / Float(frameLength)) : 0
+        levelLock.withLock { $0 = rms }
 
         // Build data chunk outside the lock
         var chunk = Data(capacity: frameLength * 4)
@@ -223,5 +237,9 @@ private final class AudioBuffer: @unchecked Sendable {
 
     func getData() -> Data {
         lock.withLock { $0 }
+    }
+
+    func currentLevel() -> Float {
+        levelLock.withLock { $0 }
     }
 }

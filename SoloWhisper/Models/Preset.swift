@@ -7,6 +7,8 @@ enum RecordingMode: String, Codable, CaseIterable {
 
 enum EngineType: String, Codable, CaseIterable {
     case cloud
+    case groq
+    case deepgram
     case whisperKit
 }
 

@@ -35,6 +35,9 @@
 		026 /* SystemAudioDucker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* SystemAudioDucker.swift */; };
 		027 /* AudioDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* AudioDeviceManager.swift */; };
 		44B1704A2F34D1480009988E /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B170492F34D1480009988E /* MenuBarIcon.swift */; };
+		030 /* DeepgramEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130 /* DeepgramEngine.swift */; };
+		028 /* RecordingPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* RecordingPillView.swift */; };
+		029 /* RecordingOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 129 /* RecordingOverlayController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +70,9 @@
 		127 /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
 		200 /* SoloWhisper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoloWhisper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		44B170492F34D1480009988E /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
+		130 /* DeepgramEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepgramEngine.swift; sourceTree = "<group>"; };
+		128 /* RecordingPillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPillView.swift; sourceTree = "<group>"; };
+		129 /* RecordingOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingOverlayController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,9 +128,19 @@
 			isa = PBXGroup;
 			children = (
 				420 /* MenuBar */,
+				422 /* Overlay */,
 				421 /* Settings */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		422 /* Overlay */ = {
+			isa = PBXGroup;
+			children = (
+				128 /* RecordingPillView.swift */,
+				129 /* RecordingOverlayController.swift */,
+			);
+			path = Overlay;
 			sourceTree = "<group>";
 		};
 		412 /* Core */ = {
@@ -198,6 +214,7 @@
 			children = (
 				106 /* TranscriptionEngine.swift */,
 				107 /* CloudEngine.swift */,
+				130 /* DeepgramEngine.swift */,
 				108 /* WhisperKitEngine.swift */,
 			);
 			path = Transcription;
@@ -337,6 +354,9 @@
 				024 /* HistoryView.swift in Sources */,
 				026 /* SystemAudioDucker.swift in Sources */,
 				027 /* AudioDeviceManager.swift in Sources */,
+				030 /* DeepgramEngine.swift in Sources */,
+				028 /* RecordingPillView.swift in Sources */,
+				029 /* RecordingOverlayController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
