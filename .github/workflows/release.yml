@@ -1,0 +1,111 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without leading v), e.g. 2.1.0'
+        required: false
+        default: '0.0.0-dev'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building version: $V"
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project SoloWhisper.xcodeproj \
+            -scheme SoloWhisper
+
+      - name: Build (Release, ad-hoc signed)
+        run: |
+          xcodebuild \
+            -project SoloWhisper.xcodeproj \
+            -scheme SoloWhisper \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            MARKETING_VERSION=${{ steps.ver.outputs.version }} \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
+            clean build
+
+      - name: Locate app
+        id: app
+        run: |
+          APP=$(find build/Build/Products/Release -maxdepth 1 -name 'SoloWhisper.app' -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "SoloWhisper.app not found"; find build/Build/Products -maxdepth 2 -name '*.app'; exit 1
+          fi
+          echo "path=$APP" >> "$GITHUB_OUTPUT"
+          echo "Found: $APP"
+
+      - name: Re-sign ad-hoc (deep)
+        run: |
+          codesign --force --deep --sign - "${{ steps.app.outputs.path }}"
+          codesign --verify --deep --verbose=2 "${{ steps.app.outputs.path }}" || true
+
+      - name: Zip app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.app.outputs.path }}" SoloWhisper.app.zip
+          echo "sha256:"; shasum -a 256 SoloWhisper.app.zip
+
+      - name: SHA256 to summary
+        run: |
+          SHA=$(shasum -a 256 SoloWhisper.app.zip | awk '{print $1}')
+          echo "### SoloWhisper.app.zip" >> "$GITHUB_STEP_SUMMARY"
+          echo "- version: ${{ steps.ver.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- sha256: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoloWhisper.app.zip
+          path: SoloWhisper.app.zip
+
+      - name: Publish release (tags only)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" SoloWhisper.app.zip --clobber
+          else
+            gh release create "$TAG" SoloWhisper.app.zip \
+              --title "SoloWhisper $TAG" \
+              --notes "Automated build from main. Includes Groq + Deepgram STT engines. Ad-hoc signed; install via Homebrew (\`brew install --cask chefrtm/solowhisper/solowhisper\`), which strips the download quarantine automatically."
+          fi
